@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -11,41 +12,50 @@ import (
 )
 
 func main() {
-	db, err := connectDb()
+	db, err := connectDB()
 	if err != nil {
 		log.Println("error connect db:", err)
 	}
-	db.AutoMigrate(&Kontak{})
+	db.AutoMigrate(&Contact{})
 
 	e := echo.New()
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
-	e.GET("/kontak", getContacts(db))
-	e.POST("/kontak", createContact(db))
-	e.PUT("/kontak/:id", updateContact(db))
-	e.DELETE("/kontak/:id", deleteContact(db))
+	e.GET("/contacts", getContacts(db))
+	e.GET("/contacts/:id", getContacts(db))
+	e.POST("/contacts", createContact(db))
+	e.PUT("/contacts/:id", updateContact(db))
+	e.DELETE("/contacts/:id", deleteContact(db))
 	e.Logger.Fatal(e.Start(":8080"))
 }
 
-type Kontak struct {
+type Contact struct {
 	Id        string `json:"id"`
 	Name      string `json:"name"`
 	Gender    string `json:"gender"`
 	Phone     string `json:"phone"`
 	Email     string `json:"email"`
-	CreatedAt string `json:"created_at" gorm:"->"`
-	UpdatedAt string `json:"updated_at" gorm:"->"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
-func (*Kontak) TableName() string {
+func (*Contact) TableName() string {
 	return "kontak"
 }
 
 func getContacts(db *gorm.DB) func(c echo.Context) error {
 	return func(c echo.Context) error {
+	  id := c.Param("id")
+	  if id != "" {
+	    var contact Contact
+      db.First(&contact, "id = ?", id)
+	    log.Println("contact id:", id)
+	    log.Println("contact by id:", contact)
+	    return c.JSON(http.StatusOK, contact)
+	  }
 		gender := c.QueryParam("gender")
-		var contacts []Kontak
+		var contacts []Contact
 
 		if gender != "" {
 			db = db.Where("gender = ?", gender)
@@ -57,16 +67,20 @@ func getContacts(db *gorm.DB) func(c echo.Context) error {
 
 func createContact(db *gorm.DB) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		contact := new(Kontak)
+		contact := new(Contact)
 		if err := c.Bind(contact); err != nil {
 			log.Println("error binding request:", err)
 		}
 		contact.Id = uuid.NewString()
-		log.Println("ct:", contact)
+		contact.CreatedAt = time.Now().String()
+		contact.UpdatedAt = time.Now().String()
 		res := db.Create(&contact)
 		if res.Error != nil {
 			return c.JSON(http.StatusInternalServerError, "something wrong")
 		}
+		log.Println("ct:", contact)
+		
+		db.First(&contact, contact.Id)
 
 		// tx := db.Begin()
 		// defer func() {
@@ -98,7 +112,7 @@ func createContact(db *gorm.DB) func(c echo.Context) error {
 func updateContact(db *gorm.DB) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		id := c.Param("id")
-		var contact Kontak
+		var contact Contact
 		db.First(&contact, id)
 		// contact := new(Kontak)
 		// if err := c.Bind(contact); err != nil {
@@ -117,7 +131,7 @@ func updateContact(db *gorm.DB) func(c echo.Context) error {
 func deleteContact(db *gorm.DB) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		id := c.Param("id")
-		var contact Kontak
+		var contact Contact
 		err := db.First(&contact, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.JSON(http.StatusNotFound, "contact not found")
