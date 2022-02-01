@@ -31,12 +31,12 @@ func main() {
 }
 
 type Contact struct {
-	Id        string `json:"id"`
+	Id        string `json:"id" gorm:"<-:create"`
 	Name      string `json:"name"`
 	Gender    string `json:"gender"`
 	Phone     string `json:"phone"`
 	Email     string `json:"email"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"created_at" gorm:"<-:create"`
 	UpdatedAt string `json:"updated_at"`
 }
 
@@ -113,17 +113,16 @@ func updateContact(db *gorm.DB) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		id := c.Param("id")
 		var contact Contact
-		db.First(&contact, id)
-		// contact := new(Kontak)
-		// if err := c.Bind(contact); err != nil {
-		// 	log.Println("error binding request:", err)
-		// }
-		log.Println("ct:", contact)
-		// db.Find(&contacts)
-		// res := db.Create(&contact)
-		// if res.Error != nil {
-		// 	return c.JSON(http.StatusInternalServerError, "something wrong")
-		// }
+		db.First(&contact, "id = ?", id)
+		if err := c.Bind(&contact); err != nil {
+			log.Println("error binding request:", err)
+		}
+		contact.UpdatedAt = time.Now().String()
+		log.Println("updated contact:", contact)
+		res := db.Save(&contact)
+		if res.Error != nil {
+			return c.JSON(http.StatusInternalServerError, "something wrong")
+		}
 		return c.JSON(http.StatusOK, contact)
 	}
 }
